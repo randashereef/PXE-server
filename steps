@@ -1,0 +1,62 @@
+###Install needed Packages
+yum install dhcp tftp tftp-server syslinux vsftpd xinetd
+
+###Configering TFTP Server
+vim /etc/xinetd.d/tftp
+$> disable	=no
+
+###Configering DHCP Server
+$> vim /etc/dhcp/dhcpd.conf
+  $> subnet 192.168.0.0 netmask 255.255.255.0
+  $> {
+  $>    range 192.168.0.10 192.168.0.100;
+  $>    option routers 192.168.0.1;
+  $>    option broadcast-address 192.168.0.101;
+  $>    default-lease-time 60000;
+  $>    max-lease-time 72000;
+  $>    nextserver 192.168.0.1;
+  $>    filename "pxelinux.0";
+  $> }
+  
+###Copy network boot files
+$> cp  /usr/share/syslinux/pxelinux.0 /var/lib/tftboot
+$> cp  /usr/share/syslinux/menu.c32 /var/lib/tftboot
+$> cp  /usr/share/syslinux/memdisk /var/lib/tftboot
+$> cp  /usr/share/syslinux/mboot.c32 /var/lib/tftboot
+$> cp  /usr/share/syslinux/chain.c32 /var/lib/tftboot
+
+$> mkdir /var/lib/tftboot/pxelinux.cfg
+$> mkdir /var/lib/tftboot/networkboot
+
+$> cp /var/ftp/pub/images/pxeboot/vmlinuz /var/lib/tftboot/networkboot
+$> cp /var/ftp/pub/images/pxeboot/initrd.img /var/lib/tftboot/networkboot	
+
+###Edite boot menu
+$> vim /usr/share/syslinux/menu.c32
+ $> default menu.c32
+ $> prompt 0
+ $> timeout 30
+ $> MENU LABEL RHEL7_X64
+ $> KERNEL /networkboot/vmlinuz
+ $> APPEND initrd=/networkboot/initrd.img inst.repo=ftp://192.168.0.1/pub ks=ftp://192.168.0.1/ks.cfg
+
+###Mount ISO
+mount /dev/s0 /var/ftp/pub/
+
+###KickStart file
+$> cp /root/anaconda-ks.cfg /var/ftp/rhel7.cfg   
+$> vim /vat/ftp/rhel.cfg
+ $> url --url="ftp://192.168.0.1/pub"
+ $> install
+ $> selinux disabled
+ $> firewall --disabled
+ $> reboot
+
+###Setup firewall and selinux
+$> firewall-cmd --add-service={ftp,dhcp} --permenant
+$> firewall-cmd --add-port={69/tcp,69/udp,4011/udp} --permenant
+$> firewall-cmd --reload
+$> setsebool -P allow_ftpd_full_access 1
+
+###Initialize services
+systemctl enable --now xinetd dhcpd.service vsftpd
